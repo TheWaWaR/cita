@@ -4,15 +4,11 @@ extern crate bellman;
 extern crate rand;
 extern crate jubjub;
 
-pub use pairing::bls12_381::FrRepr;
-
 pub mod base;
 
 pub mod b2c;
 
 pub mod c2b;
-
-pub mod c2c;
 
 pub mod c2p;
 
