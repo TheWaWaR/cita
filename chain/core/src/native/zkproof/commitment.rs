@@ -15,51 +15,16 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-use rlp::*;
-use util::{Address, U256, H256, sha3, crypt_hash};
-use util::Bytes;
+//use rlp::*;
+//use util::{Address, U256, H256};
+use super::*;
 
 #[derive(Default, Debug, Clone, PartialEq)]
-pub struct Commitment {
-    receiver: Address,
-    value: U256,
-    rand: H256,   //随机数
-}
-
-
-impl Encodable for Commitment {
-    fn rlp_append(&self, s: &mut RlpStream) {
-        s.begin_list(3);
-        s.append(&self.revevier);
-        s.append(&self.value);
-        s.append(&self.rand);
-    }
-}
-
-impl Decodable for Commitment {
-    fn decode(r: &UntrustedRlp) -> Result<Self, DecoderError> {
-        if r.item_count()? != 3 {
-            return Err(DecoderError::RlpIncorrectListLen);
-        }
-        Ok(Commitment {
-            receiver: r.val_at(0)?,
-            value: r.val_at(1)?,
-            rand: r.val_at(2)?,
-        })
-    }
-}
-
-impl Commitment {
-    // Get the RLP of this commitment.
-    pub fn rlp(&self) -> Bytes {
-        let mut s = RlpStream::new();
-        self.rlp_append(&mut s);
-        s.out()
-    }
-
-    // Get the crypt_hash (Keccak or blake2b) of this commitment.
-    pub fn rlp_hash(&self) -> H256 {
-        self.rlp().crypt_hash()
-    }
-
+pub struct CommitmentMsg {
+    proof: Proof,
+    hb:([u64;4],[u64;4]),
+    coin:[u64;4],
+    delt_ba:([u64;4],[u64;4]),
+    rp:([u64;4],[u64;4]),
+    enc:[u64;4],
 }

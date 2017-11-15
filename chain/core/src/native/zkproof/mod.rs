@@ -19,8 +19,12 @@ pub mod account;
 pub mod simple_privacy;
 pub mod commitment;
 pub mod nullifier;
+pub mod proof;
 
 
-pub use self::commitment::Commitment;
+pub use self::commitment::CommitmentMsg;
 pub use self::nullifier::Nullifier;
+pub use self::proof::Proof;
+use action_params::ActionParams;
+
 
