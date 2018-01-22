@@ -1,0 +1,41 @@
+[package]
+description = "CITA node."
+name = "cita-chain"
+version = "0.6.0"
+authors = ["Cryptape Technologies <arch@cryptape.com>"]
+
+[dependencies]
+dotenv = "0.10.0"
+threadpool = "1.7.0"
+protobuf = { version = "^1.0.0"}
+log = "0.4.0"
+clap = "2"
+byteorder = { version = "1", default-features = false }
+serde_json = "1.0"
+libproto = { git = "https://github.com/cryptape/cita-common.git", branch = "develop" }
+pubsub = { git = "https://github.com/cryptape/cita-common.git", branch = "develop" }
+util = { git = "https://github.com/cryptape/cita-common.git", branch = "develop" }
+error = { git = "https://github.com/cryptape/cita-common.git", branch = "develop" }
+logger = { git = "https://github.com/cryptape/cita-common.git", branch = "develop" }
+jsonrpc_types = { path = "../jsonrpc_types"}
+core = { path = "./core" }
+common-types = { path = "./types" }
+proof = { git = "https://github.com/cryptape/cita-common.git", branch = "develop" }
+clippy = {version = "0.0.175", optional = true}
+
+[[bin]]
+path = "main.rs"
+name = "cita-chain"
+
+[features]
+default = ["secp256k1", "sha3hash", "rabbitmq"]
+secp256k1 = ["libproto/secp256k1", "proof/secp256k1"]
+ed25519 = ["libproto/ed25519", "proof/ed25519"]
+sm2 = ["libproto/sm2", "proof/sm2"]
+sha3hash = ["util/sha3hash", "libproto/sha3hash", "proof/sha3hash"]
+blake2bhash = ["util/blake2bhash", "libproto/blake2bhash", "proof/blake2bhash"]
+sm3hash = ["util/sm3hash", "libproto/sm3hash", "proof/sm3hash"]
+rabbitmq = ["pubsub/rabbitmq"]
+zeromq = ["pubsub/zeromq"]
+kafka = ["pubsub/kafka"]
+dev = ["clippy"]

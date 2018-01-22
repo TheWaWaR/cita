@@ -1,11 +1,12 @@
 [workspace]
-members = ["auth"
-,"jsonrpc"
-,"chain"
-,"consensus/tdmint"
-,"network"
+members = ["cita-auth"
+,"cita-jsonrpc"
+,"cita-chain"
+,"cita-tendermint"
+,"cita-network"
+,"cita-executer"
+,"cita-forever"
 ,"tools/create_key_addr"
-,"tools/monitor"
 ,"tests/trans_evm"
 ,"tests/chain_performance"
 ,"tests/amqp"
@@ -13,6 +14,7 @@ members = ["auth"
 ,"tests/jsonrpc_performance"
 ,"tests/benchmark_ws"
 ,"tests/chain_performance_by_mq"
+,"tests/benchmark_execute_transaction"
 ]
 
 [profile.bench]

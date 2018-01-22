@@ -16,10 +16,10 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 use bincode::{serialize, Infinite};
-use core::libchain::block::Block;
-use core::transaction::SignedTransaction;
+use core_executer::libexecuter::block::Block;
+use core_executer::transaction::SignedTransaction;
 use crypto::*;
-use libproto::{communication, factory, submodules, topics};
+use libproto::{factory, submodules, topics, MsgClass};
 use libproto::blockchain::Transaction;
 use proof::TendermintProof;
 use protobuf::core::Message;
@@ -36,7 +36,6 @@ pub enum Step {
     Precommit,
     Commit,
 }
-
 
 pub trait AsMillis {
     fn as_millis(&self) -> u64;
@@ -118,8 +117,7 @@ impl Generateblock {
         let msg = factory::create_msg(
             submodules::CONSENSUS,
             topics::NEW_BLK,
-            communication::MsgType::BLOCK,
-            block.protobuf().write_to_bytes().unwrap(),
+            MsgClass::BLOCK(block.protobuf()),
         );
         (msg.write_to_bytes().unwrap(), block)
     }

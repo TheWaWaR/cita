@@ -2,16 +2,21 @@ version: 2
 jobs:
   build:
     docker:
-      - image: cryptape/cita-build:latest
+      - image: cita/cita-build:latest
     working_directory: ~/cita-build
+    resource_class: large
     steps:
       - checkout
+      - run:
+          name: checkout_submodule
+          command: 'git submodule update --init'
       - run:
           name: format
           command: 'cargo fmt --all  -- --write-mode diff'
       - run: 
           name: build
           command: 'cargo build --all'
+          no_output_timeout: 20m
       - save_cache:
           key: cita-build-{{ .Environment.CIRCLE_SHA1 }}
           paths:
@@ -23,8 +28,9 @@ jobs:
 
   basic_test:
     docker:
-      - image: cryptape/cita-build:latest
+      - image: cita/cita-build:latest
     working_directory: ~/cita-build
+    resource_class: large
     steps:
       - restore_cache:
           key: cita-build-{{ .Environment.CIRCLE_SHA1 }}
@@ -36,8 +42,9 @@ jobs:
 
   integrate_test:
     docker:
-      - image: cryptape/cita-build:latest
+      - image: cita/cita-build:latest
     working_directory: ~/cita-build
+    resource_class: large
     steps:
       - restore_cache:
           key: cita-build-{{ .Environment.CIRCLE_SHA1 }}

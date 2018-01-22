@@ -1,0 +1,38 @@
+[package]
+name = "cita-network"
+version = "0.6.0"
+authors = ["Cryptape Technologies <arch@cryptape.com>"]
+
+[dependencies]
+clap = "2"
+toml = "0.2"
+rustc-serialize = "0.3"
+futures = "0.1"
+futures-cpupool = "0.1"
+tokio-io = "0.1"
+byteorder = "1.0.0"
+tokio-proto = "0.1"
+tokio-service = "0.1"
+log = "0.4"
+dotenv = "0.10.0"
+bytes = "0.4"
+notify = "4.0.0"
+libproto = { git = "https://github.com/cryptape/cita-common.git", branch = "develop" }
+protobuf = { version = "^1.0.0"}
+util = { git = "https://github.com/cryptape/cita-common.git", branch = "develop" }
+pubsub = { git = "https://github.com/cryptape/cita-common.git", branch = "develop" }
+logger = { git = "https://github.com/cryptape/cita-common.git", branch = "develop" }
+rand = "0.3.*"
+clippy = {version = "0.0.175", optional = true}
+
+[features]
+default = ["secp256k1", "sha3hash", "rabbitmq"]
+secp256k1 = ["libproto/secp256k1"]
+ed25519 = ["libproto/ed25519"]
+sm2 = ["libproto/sm2"]
+sha3hash = ["util/sha3hash", "libproto/sha3hash"]
+blake2bhash = ["util/blake2bhash", "libproto/blake2bhash"]
+sm3hash = ["util/sm3hash", "libproto/sm3hash"]
+rabbitmq = ["pubsub/rabbitmq"]
+zeromq = ["pubsub/zeromq"]
+kafka = ["pubsub/kafka"]

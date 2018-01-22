@@ -35,6 +35,7 @@ use std::sync::mpsc;
 use std::thread;
 use std::time;
 use trans::*;
+use uuid::Uuid;
 
 static mut START_H: u64 = 1;
 
@@ -67,6 +68,7 @@ pub struct Sendtx {
     tx_format_err: bool,
     sys_time: Arc<Mutex<time::SystemTime>>,
     curr_height: u64,
+    is_change_acct: bool,
 }
 
 #[allow(non_snake_case)]
@@ -94,6 +96,7 @@ impl Sendtx {
             tx_format_err: param.tx_format_err,
             sys_time: Arc::new(Mutex::new(time::SystemTime::now())),
             curr_height: 0,
+            is_change_acct: param.is_change_acct,
         };
         trans
     }
@@ -180,7 +183,6 @@ impl Sendtx {
             let _ = sync_send.send((0, 1));
         }
     }
-
 
     pub fn send_tx(
         &self,
@@ -309,6 +311,7 @@ impl Sendtx {
                         frompv,
                         self.curr_height + 88,
                         self.quota,
+                        "0".to_owned(),
                         false,
                     )
                 }
@@ -320,17 +323,23 @@ impl Sendtx {
                         frompv,
                         self.curr_height + 88,
                         self.quota,
+                        "0".to_owned(),
                         true,
                     )
                 }
                 TxCtx::Correct => {
                     //正确交易
+                    if !self.is_change_acct {
+                        pv_change = false;
+                    }
+                    let nonce = Uuid::new_v4().to_string();
                     Trans::generate_tx(
                         &self.code,
                         self.contract_address.clone(),
                         frompv,
                         self.curr_height + 88,
                         self.quota,
+                        nonce,
                         false,
                     )
                 }
@@ -456,10 +465,7 @@ impl Sendtx {
                 for (key, val) in &tx_info {
                     let s = format!(
                         "height:{}, blocknum: {}, time stamp :{}, use time: {} ms\n",
-                        key,
-                        val.blocknum,
-                        val.time_stamp,
-                        val.use_time
+                        key, val.blocknum, val.time_stamp, val.use_time
                     );
                     result.push_str(&s);
                 }
@@ -476,19 +482,11 @@ impl Sendtx {
         };
         info!(
             "tx_num: {}, start_h: {}, end_h: {}, use time: {} ms, tps: {}",
-            tx_num,
-            start_h,
-            h,
-            secs,
-            tps
+            tx_num, start_h, h, secs, tps
         );
         let s = format!(
             "tx_num: {}, start_h: {}, end_h: {}, use time: {} ms, tps: {}\n",
-            tx_num,
-            start_h,
-            h,
-            secs,
-            tps
+            tx_num, start_h, h, secs, tps
         );
         result.push_str(&s);
         let path = Path::new("cita_performance.txt");
@@ -502,7 +500,6 @@ impl Sendtx {
             Ok(_) => (),
         }
     }
-
 
     pub fn start(&mut self) {
         //发送重复交易
@@ -520,7 +517,6 @@ impl Sendtx {
             self.wait(self.totaltx, sync_recv, _url);
         }
     }
-
 
     fn wait(&self, totaltx: u64, sync_recv: mpsc::Receiver<(u64, u64)>, url: String) {
         let mut sucess = 0;
@@ -571,16 +567,8 @@ impl Sendtx {
                             end_h: {}
                             jsonrpc use time: {} ms
                             tps: {}
-                            single tx respone time: {} ns"#,
-                            buf,
-                            totaltx,
-                            sucess,
-                            fail,
-                            START_H,
-                            _end_h,
-                            secs,
-                            tps,
-                            single_tx_response_time
+                            single tx respone time: {} ns\n"#,
+                            buf, totaltx, sucess, fail, START_H, _end_h, secs, tps, single_tx_response_time
                         );
                         let path = Path::new("jsonrpc_performance.txt");
                         let mut file = match File::create(&path) {

@@ -46,10 +46,11 @@ start() {
 
     if [ -z ${debug} ]; then
         
-        cita-monitor start > /dev/null 2>&1
-    else                                        
-        RUST_LOG=auth,network,consensus_tendermint,proof,txpool,engine,libproto,jsonrpc,jsonrpc_types,chain,core=${debug} \
-        cita-monitor start > /dev/null 2>&1
+        cita-forever start > /dev/null 2>&1
+    else
+        RUST_LOG=cita_auth=${debug},cita_chain=${debug},cita_executer=${debug},cita_jsonrpc=${debug},cita_network=${debug},cita_tendermint=${debug},\
+core=${debug},engine=${debug},jsonrpc_types=${debug},libproto=${debug},proof=${debug},txpool=${debug} \
+        cita-forever start > /dev/null 2>&1
     fi
 }
 
@@ -68,11 +69,11 @@ clean() {
 }
 
 stop() {
-    cita-monitor stop > /dev/null 2>&1
+    cita-forever stop > /dev/null 2>&1
 }
 
 rotate() {
-    cita-monitor logrotate > /dev/null 2>&1
+    cita-forever logrotate > /dev/null 2>&1
 }
 
 status() {
