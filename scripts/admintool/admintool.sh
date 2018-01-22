@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+set -e -o pipefail
 
 display_help()
 {
@@ -104,7 +104,7 @@ create_genesis(){
     else
         cp ${BINARY_DIR}/scripts/admintool/init_data.json ${CONFIG_DIR}/init_data.json
     fi
-    python ${BINARY_DIR}/scripts/admintool/create_genesis.py --authorities "${CONFIG_DIR}/authorities" --init_data "${CONFIG_DIR}/init_data.json"
+    python ${BINARY_DIR}/scripts/admintool/create_genesis.py --authorities "${CONFIG_DIR}/authorities" --init_data "${CONFIG_DIR}/init_data.json" --resource "${CONFIG_DIR}/resource/"
     rm -rf ${CONFIG_DIR}/init_data.json
 }
 
@@ -137,7 +137,18 @@ network(){
 
 chain(){
     cp genesis.json ${CONFIG_DIR}/node${1}/genesis.json
+    if [ -d "${CONFIG_DIR}/resource" ]; then
+        cp -rf resource ${CONFIG_DIR}/node${1}/
+    fi
     cp -f ${BINARY_DIR}/scripts/admintool/chain_check_example.json      ${CONFIG_DIR}/node${1}/chain.json
+}
+
+executer(){
+    cp genesis.json ${CONFIG_DIR}/node${1}/genesis.json
+    if [ -d "${CONFIG_DIR}/resource" ]; then
+        cp -rf resource ${CONFIG_DIR}/node${1}/
+    fi
+    cp -f ${BINARY_DIR}/scripts/admintool/chain_check_example.json      ${CONFIG_DIR}/node${1}/executer.json
 }
 
 jsonrpc(){
@@ -159,23 +170,24 @@ kafka(){
     fi
 }
 
-moniter(){
-    cp -f ${BINARY_DIR}/scripts/admintool/monitor_example.toml          ${CONFIG_DIR}/node${1}/monitor.toml
+forever(){
+    cp -f ${BINARY_DIR}/scripts/admintool/forever_example.toml          ${CONFIG_DIR}/node${1}/forever.toml
 }
 
 node(){
     mkdir -p ${CONFIG_DIR}/node${1}
-    cp $CONFIG_DIR/backup/*  ${CONFIG_DIR}/
+    cp -rf $CONFIG_DIR/backup/*  ${CONFIG_DIR}/
     create_key $1
     jsonrpc $1
     consensus $1
     chain $1
+    executer  $1
     python ${BINARY_DIR}/scripts/admintool/create_network_config.py ${CONFIG_DIR} 1 $SIZE $IP_LIST
     mv ${CONFIG_DIR}/network.toml ${CONFIG_DIR}/node${1}/
     auth $1
     env $1
     kafka $1
-    moniter $1
+    forever $1
 }
 
 default(){
@@ -191,15 +203,19 @@ default(){
         jsonrpc $ID
         consensus $ID
         chain $ID
+        executer $ID
         network $ID
         auth $ID
         env $ID
         kafka $ID
-        moniter $ID
+        forever $ID
     done
     mkdir -p $CONFIG_DIR/backup
     rm -rf $CONFIG_DIR/backup/*
     mv ${CONFIG_DIR}/*.json ${CONFIG_DIR}/authorities $CONFIG_DIR/backup/
+    if [ -d "${CONFIG_DIR}/resource" ]; then
+        mv ${CONFIG_DIR}/resource $CONFIG_DIR/backup/
+    fi
 }
 
 echo "************************begin create node config******************************"

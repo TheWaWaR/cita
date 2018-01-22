@@ -17,7 +17,7 @@
 
 use bincode::{serialize, Infinite};
 use crypto::*;
-use libproto::{communication, factory, submodules, topics};
+use libproto::{factory, submodules, topics, MsgClass};
 use libproto::blockchain::{Block, BlockWithProof, SignedTransaction, Transaction};
 use proof::TendermintProof;
 use protobuf::RepeatedField;
@@ -35,7 +35,6 @@ pub enum Step {
     Precommit,
     Commit,
 }
-
 
 pub trait AsMillis {
     fn as_millis(&self) -> u64;
@@ -135,8 +134,7 @@ impl Generateblock {
         let msg = factory::create_msg(
             submodules::CONSENSUS,
             topics::NEW_PROOF_BLOCK,
-            communication::MsgType::BLOCK_WITH_PROOF,
-            proof_blk.write_to_bytes().unwrap(),
+            MsgClass::BLOCKWITHPROOF(proof_blk.clone()),
         );
         (msg.write_to_bytes().unwrap(), proof_blk)
     }

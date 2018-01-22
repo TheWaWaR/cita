@@ -8,6 +8,7 @@ extern crate rustc_hex;
 extern crate serde;
 extern crate serde_json;
 extern crate util;
+extern crate uuid;
 
 extern crate clap;
 #[macro_use]
@@ -15,7 +16,6 @@ extern crate log;
 extern crate logger;
 #[macro_use]
 extern crate serde_derive;
-
 
 pub mod param;
 pub mod trans;
