@@ -17,7 +17,7 @@
 
 use chain_core::db;
 use libproto::blockchain::SignedTransaction;
-use protobuf::core::{parse_from_bytes, Message};
+use std::convert::{TryFrom, TryInto};
 use std::sync::Arc;
 use tx_pool::Pool;
 use util::H256;
@@ -25,23 +25,22 @@ use util::datapath::DataPath;
 use util::kvdb::{Database, DatabaseConfig, KeyValueDB};
 
 #[derive(Clone)]
-pub struct Txwal {
+pub struct TxWal {
     db: Arc<KeyValueDB>,
 }
 
-impl Txwal {
+impl TxWal {
     pub fn new(path: &str) -> Self {
         let nosql_path = DataPath::root_node_path() + path;
         let config = DatabaseConfig::with_columns(db::NUM_COLUMNS);
         let db = Database::open(&config, &nosql_path).unwrap();
-        Txwal { db: Arc::new(db) }
+        TxWal { db: Arc::new(db) }
     }
 
     pub fn write(&self, tx: &SignedTransaction) {
-        let tx = tx.clone();
         let mut batch = self.db.transaction();
-        let block_binary = tx.write_to_bytes().unwrap();
-        batch.put_vec(None, tx.get_tx_hash(), block_binary);
+        let block_binary: Vec<u8> = tx.try_into().unwrap();
+        batch.put_vec(None, tx.clone().get_tx_hash(), block_binary);
         let _ = self.db.write(batch);
     }
 
@@ -62,7 +61,7 @@ impl Txwal {
         let mut num: u64 = 0;
         let ite = self.db.iter(None);
         for item in ite {
-            let tx = parse_from_bytes::<SignedTransaction>(item.1.as_ref()).unwrap();
+            let tx = SignedTransaction::try_from(item.1.as_ref()).unwrap();
             num += 1;
             pool.enqueue(tx);
         }

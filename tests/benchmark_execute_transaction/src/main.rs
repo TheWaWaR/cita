@@ -18,7 +18,7 @@
 extern crate cita_crypto;
 extern crate clap;
 extern crate common_types as types;
-extern crate core_executer;
+extern crate core_executor;
 extern crate dotenv;
 extern crate libproto;
 #[macro_use]
@@ -30,17 +30,16 @@ extern crate serde_json;
 extern crate util;
 
 use cita_crypto::KeyPair;
-use core_executer::libexecuter::block::{Block, BlockBody, Drain, OpenBlock};
+use core_executor::libexecutor::block::{Block, BlockBody, Drain, OpenBlock};
 use mktemp::Temp;
 use rustc_serialize::hex::FromHex;
-//use core_executer::libexecuter::block::{Block, BlockBody};
-use core_executer::db;
-use core_executer::db::*;
-use core_executer::env_info::LastHashes;
-use core_executer::libexecuter::executor::Executor;
-use core_executer::libexecuter::genesis::Genesis;
+//use core_executor::libexecutor::block::{Block, BlockBody};
+use core_executor::db;
+use core_executor::db::*;
+use core_executor::env_info::LastHashes;
+use core_executor::libexecutor::executor::{Config, Executor};
+use core_executor::libexecutor::genesis::Genesis;
 use std::fs::File;
-use std::io::BufReader;
 use std::io::Read;
 use std::io::Write;
 use std::path::Path;
@@ -151,13 +150,13 @@ pub fn init_executor(config_path: &str, genesis_path: &str) -> Arc<Executor> {
     let state_path = DataPath::state_path();
     let config = DatabaseConfig::with_columns(db::NUM_COLUMNS);
     let db = Database::open(&config, &state_path).unwrap();
-    // Load from genesis json file
-    let config_file = File::open(config_path).unwrap();
+
+    let executor_config = Config::new(config_path);
     let genesis = Genesis::init(genesis_path);
     Arc::new(Executor::init_executor(
         Arc::new(db),
         genesis,
-        BufReader::new(config_file),
+        executor_config,
     ))
 }
 
@@ -206,23 +205,20 @@ fn bench_execute_trans(config_path: &str, genesis_path: &str, trans_num: u32, is
         let mut block = create_block(&ext, Address::from(0), &data, (0, trans_num), is_change_pv);
         let current_height = ext.get_current_height();
         info!("current height: {}", current_height);
-        let s = ext.state();
-        let senders = s.senders.clone();
-        let creators = s.creators.clone();
-        let check_permission = ext.check_permission;
-        let check_quota = ext.check_quota;
+        let conf = ext.get_current_sys_conf(current_height);
+        let check_permission = conf.check_permission;
+        let check_quota = conf.check_quota;
         let current_state_root = ext.current_state_root();
         let last_hashes = LastHashes::from(ext.last_hashes.read().clone());
+
         let mut open_block = OpenBlock::new(
             ext.factories.clone(),
-            senders,
-            creators,
+            conf,
             false,
             block.clone(),
             ext.state_db.boxed_clone(),
             current_state_root,
             last_hashes.into(),
-            &ext.account_gas_limit.read().clone(),
         ).unwrap();
 
         //execute transactions
@@ -344,6 +340,6 @@ fn main() {
         .unwrap();
 
     let genesis_path = matches.value_of("genesis").unwrap_or("genesis.json");
-    let config_path = matches.value_of("config").unwrap_or("executer.json");
+    let config_path = matches.value_of("config").unwrap_or("executor.json");
     bench_execute_trans(config_path, genesis_path, block_tx_num, is_change_pv, max_h);
 }

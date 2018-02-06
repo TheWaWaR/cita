@@ -24,14 +24,13 @@ use error::ErrorCode;
 //CountOrCode
 use jsonrpc_types::rpctypes::{self as rpctypes, BlockParamsByHash, BlockParamsByNumber, Filter as RpcFilter,
                               Log as RpcLog, Receipt as RpcReceipt, RpcBlock};
-use libproto;
-use libproto::{communication, factory, parse_msg, request, response, submodules, topics, BlockTxHashes,
-               ExecutedResult, MsgClass, SyncRequest, SyncResponse};
-use libproto::blockchain::{Block as ProtobufBlock, BlockWithProof, ProofType};
-use libproto::request::Request_oneof_req as Request;
+use libproto::{cmd_id, request, response, submodules, topics, Block as ProtobufBlock, BlockTxHashes, BlockTxHashesReq,
+               BlockWithProof, ExecutedResult, Message, MsgClass, OperateType, ProofType,
+               Request_oneof_req as Request, SyncRequest, SyncResponse};
 use proof::TendermintProof;
-use protobuf::{Message, RepeatedField};
+use protobuf::RepeatedField;
 use serde_json;
+use std::convert::{TryFrom, TryInto};
 use std::mem;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
@@ -58,11 +57,14 @@ impl Forward {
     }
 
     // 注意: 划分函数处理流程
-    pub fn dispatch_msg(&self, _key: &str, msg: &[u8]) {
-        let (cmd_id, origin, content_ext) = parse_msg(msg);
+    pub fn dispatch_msg(&self, _key: &str, msg_bytes: &[u8]) {
+        let mut msg = Message::try_from(msg_bytes).unwrap();
+        let cid = msg.get_cmd_id();
+        let origin = msg.get_origin();
+        let content_ext = msg.take_content();
         match content_ext {
             MsgClass::REQUEST(req) => {
-                self.reply_request(req, msg.to_vec());
+                self.reply_request(req, msg_bytes.to_vec());
             }
 
             //send to block_processor to operate
@@ -75,7 +77,7 @@ impl Forward {
             }
 
             MsgClass::SYNCREQUEST(sync_req) => {
-                if libproto::cmd_id(submodules::CHAIN, topics::SYNC_BLK) == cmd_id {
+                if cmd_id(submodules::CHAIN, topics::SYNC_BLK) == cid {
                     self.reply_syn_req(sync_req, origin);
                 }
             }
@@ -96,7 +98,7 @@ impl Forward {
         let mut response = response::Response::new();
         response.set_request_id(req.take_request_id());
         let topic = "chain.rpc".to_string();
-        let retrans_topic = "executer.rpc".to_string();
+        let retrans_topic = "executor.rpc".to_string();
         match req.req.unwrap() {
             // TODO: should check the result, parse it first!
             Request::block_number(_) => {
@@ -116,11 +118,7 @@ impl Forward {
                         let include_txs = param.include_txs;
                         match self.chain.block_by_hash(H256::from(hash.as_slice())) {
                             Some(block) => {
-                                let rpc_block = RpcBlock::new(
-                                    hash,
-                                    include_txs,
-                                    block.protobuf().write_to_bytes().unwrap(),
-                                );
+                                let rpc_block = RpcBlock::new(hash, include_txs, block.protobuf().try_into().unwrap());
                                 serde_json::to_string(&rpc_block)
                                     .map(|data| response.set_block(data))
                                     .map_err(|err| {
@@ -146,7 +144,7 @@ impl Forward {
                         let rpc_block = RpcBlock::new(
                             block.hash().to_vec(),
                             include_txs,
-                            block.protobuf().write_to_bytes().unwrap(),
+                            block.protobuf().try_into().unwrap(),
                         );
                         serde_json::to_string(&rpc_block)
                             .map(|data| response.set_block(data))
@@ -253,19 +251,17 @@ impl Forward {
                 error!("mtach error Request_oneof_req msg!!!!");
             }
         };
-        let msg: communication::Message = response.into();
-        self.ctx_pub
-            .send((topic, msg.write_to_bytes().unwrap()))
-            .unwrap();
+        let msg: Message = response.into();
+        self.ctx_pub.send((topic, msg.try_into().unwrap())).unwrap();
     }
 
     // Consensus block enqueue
     fn consensus_block_enqueue(&self, proof_blk: BlockWithProof) {
-        let current_height = self.chain.get_current_height();
+        let current_height = self.chain.get_max_store_height() as usize;
         let mut proof_blk = proof_blk;
         let block = proof_blk.take_blk();
         let proof = proof_blk.take_proof();
-        let blk_height = block.get_header().get_height();
+        let blk_height = block.get_header().get_height() as usize;
         trace!(
             "Received consensus block: block_number:{:?} current_height: {:?}",
             blk_height,
@@ -275,19 +271,18 @@ impl Forward {
         if blk_height == (current_height + 1) {
             {
                 self.chain.block_map.write().insert(
-                    blk_height,
+                    blk_height as u64,
                     BlockInQueue::ConsensusBlock(rblock.clone(), proof.clone()),
                 );
             };
             self.chain.save_current_block_poof(proof);
+            self.chain.set_block_body(blk_height as u64, &rblock);
             self.chain
                 .max_store_height
-                .store(blk_height as usize, Ordering::SeqCst);
-            self.chain.set_block_body(blk_height, &rblock);
-
+                .store(blk_height, Ordering::SeqCst);
             let tx_hashes = rblock.body().transaction_hashes();
             self.chain
-                .delivery_block_tx_hashes(blk_height, tx_hashes, &self.ctx_pub);
+                .delivery_block_tx_hashes(blk_height as u64, tx_hashes, &self.ctx_pub);
         }
     }
 
@@ -314,7 +309,7 @@ impl Forward {
                         trace!(
                             "sync: max height {:?}, chain.blk: OperateType {:?}",
                             height,
-                            communication::OperateType::SINGLE
+                            OperateType::SINGLE
                         );
                     }
                 }
@@ -327,20 +322,20 @@ impl Forward {
             res_vec.get_blocks().len()
         );
         if res_vec.mut_blocks().len() > 0 {
-            let msg = factory::create_msg_ex(
+            let msg = Message::init(
                 submodules::CHAIN,
                 topics::NEW_BLK,
-                communication::OperateType::SINGLE,
+                OperateType::SINGLE,
                 origin,
                 MsgClass::SYNCRESPONSE(res_vec),
             );
             trace!(
                 "sync: origin {:?}, chain.blk: OperateType {:?}",
                 origin,
-                communication::OperateType::SINGLE
+                OperateType::SINGLE
             );
             self.ctx_pub
-                .send(("chain.blk".to_string(), msg.write_to_bytes().unwrap()))
+                .send(("chain.blk".to_string(), msg.try_into().unwrap()))
                 .unwrap();
         }
     }
@@ -363,14 +358,7 @@ impl Forward {
                 );
                 break;
             }
-
             self.add_sync_block(Block::from(block));
-        }
-
-        if !self.chain.is_sync.load(Ordering::SeqCst) {
-            let number = self.chain.get_current_height() + 1;
-            debug!("sync block number is {}", number);
-            //self.write_sender.send(number);
         }
     }
 
@@ -379,6 +367,9 @@ impl Forward {
     fn add_sync_block(&self, block: Block) {
         let block_proof_type = block.proof_type();
         let chain_proof_type = self.chain.get_chain_prooftype();
+        let blk_height = block.number() as usize;
+        let chain_max_height = self.chain.get_max_height();
+        let chain_max_store_height = self.chain.get_max_store_height();
         //check sync_block's proof type, it must be consistent with chain
         if chain_proof_type != block_proof_type {
             error!(
@@ -398,14 +389,13 @@ impl Forward {
 
                 debug!(
                     "sync: add_sync_block: proof_height = {}, block height = {} max_height = {}",
-                    proof_height,
-                    block.number(),
-                    self.chain.get_max_height()
+                    proof_height, blk_height, chain_max_height
                 );
 
+                let height = block.number();
                 let mut blocks = self.chain.block_map.write();
-                if (block.number() as usize) != ::std::usize::MAX {
-                    if proof_height == self.chain.get_max_height() {
+                if blk_height != ::std::usize::MAX {
+                    if proof_height == chain_max_height || proof_height == chain_max_store_height {
                         // Set proof of prev sync block
                         if let Some(prev_block_in_queue) = blocks.get_mut(&proof_height) {
                             if let &mut BlockInQueue::SyncBlock(ref mut value) = prev_block_in_queue {
@@ -415,12 +405,21 @@ impl Forward {
                                 }
                             }
                         }
-
+                        self.chain.set_block_body(height, &block);
                         self.chain
-                            .max_height
-                            .store(block.number() as usize, Ordering::SeqCst);
+                            .max_store_height
+                            .store(height as usize, Ordering::SeqCst);
+                        let tx_hashes = block.body().transaction_hashes();
+                        self.chain
+                            .delivery_block_tx_hashes(height, tx_hashes, &self.ctx_pub);
                         debug!("sync: insert block-{} in map", block.number());
-                        blocks.insert(block.number(), BlockInQueue::SyncBlock((block, None)));
+                        blocks.insert(height, BlockInQueue::SyncBlock((block, None)));
+                    } else {
+                        info!(
+                            "sync: insert block-{} is not continious proof height {}",
+                            block.number(),
+                            proof_height
+                        );
                     }
                 } else if proof_height > self.chain.get_current_height() {
                     if let Some(block_in_queue) = blocks.get_mut(&proof_height) {
@@ -440,7 +439,7 @@ impl Forward {
         }
     }
 
-    fn deal_block_tx_req(&self, block_tx_hashes_req: &libproto::BlockTxHashesReq) {
+    fn deal_block_tx_req(&self, block_tx_hashes_req: &BlockTxHashesReq) {
         let block_height = block_tx_hashes_req.get_height();
         if let Some(tx_hashes) = self.chain.transaction_hashes(BlockId::Number(block_height)) {
             //prepare and send the block tx hashes to auth
@@ -453,13 +452,13 @@ impl Forward {
             block_tx_hashes.set_tx_hashes(RepeatedField::from_slice(&tx_hashes_in_u8[..]));
             block_tx_hashes.set_block_gas_limit(self.chain.block_gas_limit.load(Ordering::SeqCst) as u64);
             block_tx_hashes.set_account_gas_limit(self.chain.account_gas_limit.read().clone().into());
-            let msg = factory::create_msg(
+            let msg = Message::init_default(
                 submodules::CHAIN,
                 topics::BLOCK_TXHASHES,
                 MsgClass::BLOCKTXHASHES(block_tx_hashes),
             );
             self.ctx_pub
-                .send(("chain.txhashes".to_string(), msg.write_to_bytes().unwrap()))
+                .send(("chain.txhashes".to_string(), msg.try_into().unwrap()))
                 .unwrap();
             trace!("response block's tx hashes for height:{}", block_height);
         } else {

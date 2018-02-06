@@ -126,7 +126,7 @@ env(){
 }
 
 auth(){
-    cp -f ${BINARY_DIR}/scripts/admintool/auth_example.json  ${CONFIG_DIR}/node${1}/auth.json
+    cp -f ${BINARY_DIR}/scripts/admintool/auth_example.toml  ${CONFIG_DIR}/node${1}/auth.toml
 }
 
 network(){
@@ -136,19 +136,18 @@ network(){
 
 
 chain(){
-    cp genesis.json ${CONFIG_DIR}/node${1}/genesis.json
     if [ -d "${CONFIG_DIR}/resource" ]; then
         cp -rf resource ${CONFIG_DIR}/node${1}/
     fi
-    cp -f ${BINARY_DIR}/scripts/admintool/chain_check_example.json      ${CONFIG_DIR}/node${1}/chain.json
+    cp -f ${BINARY_DIR}/scripts/admintool/chain_check_example.toml      ${CONFIG_DIR}/node${1}/chain.toml
 }
 
-executer(){
+executor(){
     cp genesis.json ${CONFIG_DIR}/node${1}/genesis.json
     if [ -d "${CONFIG_DIR}/resource" ]; then
         cp -rf resource ${CONFIG_DIR}/node${1}/
     fi
-    cp -f ${BINARY_DIR}/scripts/admintool/chain_check_example.json      ${CONFIG_DIR}/node${1}/executer.json
+    cp -f ${BINARY_DIR}/scripts/admintool/executor_example.toml      ${CONFIG_DIR}/node${1}/executor.toml
 }
 
 jsonrpc(){
@@ -159,7 +158,7 @@ jsonrpc(){
         ((W_PORT=${W_PORT}+${1}))
     fi
     python ${BINARY_DIR}/scripts/admintool/create_jsonrpc_config.py ${HTTP_ENABLE:-"true"} $H_PORT ${WS_ENABLE:-"true"} $W_PORT ${CONFIG_DIR}
-    mv ${CONFIG_DIR}/jsonrpc.json ${CONFIG_DIR}/node${1}/
+    mv ${CONFIG_DIR}/jsonrpc.toml ${CONFIG_DIR}/node${1}/
 }
 
 # Kafka Configuration creating
@@ -181,7 +180,7 @@ node(){
     jsonrpc $1
     consensus $1
     chain $1
-    executer  $1
+    executor  $1
     python ${BINARY_DIR}/scripts/admintool/create_network_config.py ${CONFIG_DIR} 1 $SIZE $IP_LIST
     mv ${CONFIG_DIR}/network.toml ${CONFIG_DIR}/node${1}/
     auth $1
@@ -203,7 +202,7 @@ default(){
         jsonrpc $ID
         consensus $ID
         chain $ID
-        executer $ID
+        executor $ID
         network $ID
         auth $ID
         env $ID
