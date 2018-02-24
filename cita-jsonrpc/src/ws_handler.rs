@@ -73,7 +73,7 @@ impl Handler for WsHandler {
         self.thread_pool.execute(move || {
             let mut req_id = Id::Null;
             let mut jsonrpc_version = None;
-            let err = match encode_request(msg.into_text().unwrap()) {
+            let err = match encode_request(&msg.into_text().unwrap()) {
                 Err(err) => Err(err),
                 Ok(rpc) => {
                     req_id = rpc.id.clone();
@@ -85,8 +85,6 @@ impl Handler for WsHandler {
                     };
                     method_handler.request(&rpc).map(|req| {
                         let request_id = req.request_id.clone();
-                        //let data: communication::Message = _req.into();
-                        //this.tx.send((topic, data.write_to_bytes().unwrap()));
                         let _ = tx.send((topic, req));
                         let value = (req_info, sender.clone());
                         {

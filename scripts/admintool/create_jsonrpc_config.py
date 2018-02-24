@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding=utf-8
 
-import json
+import toml
 import os
 import sys
 
@@ -12,7 +12,7 @@ def main():
     ws_enable = sys.argv[3] == "true"
     profile_config = dict(enable=False, flag_prof_start=0, flag_prof_duration=0)
     http_config = dict(enable=http_enable, listen_ip="0.0.0.0", listen_port=sys.argv[2],
-                       timeout=3)
+                       timeout=3, allow_origin="*")
 
     ws_config = dict(
         enable=ws_enable, thread_number=2,
@@ -39,9 +39,9 @@ def main():
     data["ws_config"] = ws_config
     data["new_tx_flow_config"] = new_tx_flow_config
     path = sys.argv[5]
-    dump_path = os.path.join(path, "jsonrpc.json")
+    dump_path = os.path.join(path, "jsonrpc.toml")
     f = open(dump_path, "w")
-    json.dump(data, f, indent=4)
+    toml.dump(data, f)
     f.close()
 
 
