@@ -34,7 +34,7 @@ use libexecutor::extras::*;
 use libexecutor::genesis::Genesis;
 pub use libexecutor::transaction::*;
 
-use libproto::{submodules, topics, ConsensusConfig, ExecutedResult, Message, MsgClass};
+use libproto::{ConsensusConfig, ExecutedResult, Message};
 use libproto::blockchain::{Proof as ProtoProof, ProofType};
 
 use bincode::{deserialize as bin_deserialize, serialize as bin_serialize, Infinite};
@@ -42,7 +42,7 @@ use native::Factory as NativeFactory;
 use state::State;
 use state_db::StateDB;
 use std::collections::{BTreeMap, HashSet, VecDeque};
-use std::convert::TryInto;
+use std::convert::{Into, TryInto};
 use std::fs::File;
 use std::io::Read;
 use std::sync::Arc;
@@ -127,8 +127,6 @@ pub enum Stage {
     /// Finalized
     Idle,
 }
-
-const DELAY_ACTIVE_INTERVAL_NUM: usize = 2;
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub struct GlobalSysConfig {
@@ -294,7 +292,7 @@ impl Executor {
         let len = confs.len();
         if len > 0 {
             for i in 0..len {
-                if confs[i].changed_height + DELAY_ACTIVE_INTERVAL_NUM <= now_height as usize {
+                if confs[i].changed_height + confs[0].delay_active_interval <= now_height as usize {
                     return confs[i].clone();
                 }
             }
@@ -582,11 +580,7 @@ impl Executor {
 
     pub fn send_executed_info_to_chain(&self, ctx_pub: &Sender<(String, Vec<u8>)>) {
         let executed_result = { self.executed_result.read().clone() };
-        let msg = Message::init_default(
-            submodules::EXECUTOR,
-            topics::EXECUTED_RESULT,
-            MsgClass::EXECUTED(executed_result),
-        );
+        let msg: Message = executed_result.into();
         ctx_pub
             .send(("executor.result".to_string(), msg.try_into().unwrap()))
             .unwrap();
@@ -630,14 +624,13 @@ impl Executor {
         // Reload config
         self.reload_config();
 
+        self.set_executed_result(&closed_block);
+        self.send_executed_info_to_chain(ctx_pub);
+        self.write_batch(closed_block.clone());
         let header = closed_block.header().clone();
         {
             *self.current_header.write() = header;
         }
-        self.set_executed_result(&closed_block);
-        self.send_executed_info_to_chain(ctx_pub);
-        self.write_batch(closed_block);
-
         self.update_last_hashes(&self.get_current_hash());
     }
 
@@ -828,7 +821,7 @@ mod tests {
         if let Ok((_, msg_vec)) = recv.recv() {
             let mut msg = Message::try_from(&msg_vec).unwrap();
             match msg.take_content() {
-                MsgClass::EXECUTED(info) => {
+                MsgClass::ExecutedResult(info) => {
                     let pro = block.protobuf();
                     let chain_block = ChainBlock::from(pro);
                     inchain.set_block_body(h, &chain_block);
